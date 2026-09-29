@@ -36,8 +36,9 @@ pub enum RunDepsStatus {
 /// [`crate::optimistic_repeat_install::check_optimistic_repeat_install`]: the same freshness checks, with
 /// the differences pnpm's run gate carries over its install fast path —
 /// it runs regardless of `optimisticRepeatInstall`, never treats local
-/// file dependencies as outdated, ignores `dev`/`optional`/`production`
-/// drift (scripts always run with the default groups), compares
+/// file dependencies as outdated, ignores the resolution-only `autoDedupe`
+/// baseline and `dev`/`optional`/`production` drift (scripts always run with
+/// the default groups), compares
 /// configuration dependencies, and reports drift with pnpm's
 /// user-facing issue wording instead of a diagnostic-only reason.
 /// `state` arrives from the caller, which already had to load it to
@@ -152,7 +153,7 @@ fn first_lockfile_or_setting_drift(
         node_linker,
         included,
         supported_architectures,
-        &["dev", "optional", "production"],
+        &["autoDedupe", "dev", "optional", "production"],
     ) {
         return Some(format!("The value of the {setting} setting has changed"));
     }

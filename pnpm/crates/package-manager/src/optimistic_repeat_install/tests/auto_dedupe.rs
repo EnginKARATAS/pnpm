@@ -7,6 +7,24 @@ use pnpm_workspace_state::{load_workspace_state, update_workspace_state};
 use std::fs;
 
 #[test]
+fn frozen_auto_dedupe_baseline_does_not_make_dependencies_outdated_before_run() {
+    let (dir, config) = setup_content_check_project();
+    let mut config = config.clone();
+    config.auto_dedupe = true;
+    let config = config.leak();
+    let manifest = PackageManifest::from_path(dir.path().join("package.json")).unwrap();
+    let projects = [(dir.path().to_path_buf(), &manifest)];
+
+    assert_eq!(workspace_deps_status(&dir, config, &projects), RunDepsStatus::UpToDate);
+    let state = load_workspace_state(dir.path()).unwrap().unwrap();
+    assert_eq!(state.settings.auto_dedupe, None);
+    assert_eq!(
+        content_check_decision(&dir, config, true, &projects),
+        Decision::Skipped { reason: "settings drift" },
+    );
+}
+
+#[test]
 fn auto_dedupe_baseline_survives_install_and_run_content_checks() {
     for check_before_run in [false, true] {
         let (dir, config) = setup_content_check_project();

@@ -155,6 +155,56 @@ fn auto_dedupe_preserves_incompatible_exact_versions_and_can_be_disabled() {
 }
 
 #[test]
+fn frozen_auto_dedupe_install_does_not_reinstall_before_commands() {
+    let CommandTempCwd { root, workspace, npmrc_info, .. } =
+        CommandTempCwd::init().add_mocked_registry();
+    write_settings(&workspace, "autoDedupe: true\n").unwrap();
+    fs::write(
+        workspace.join("package.json"),
+        serde_json::json!({
+            "name": "frozen-auto-dedupe",
+            "dependencies": {DEP: "100.0.0"},
+            "scripts": {
+                "verify": "node -e \"console.log('verified')\"",
+                "postinstall": "node -e \"require('node:fs').appendFileSync('installs', '1')\"",
+            },
+        })
+        .to_string(),
+    )
+    .unwrap();
+    pnpm_at(&workspace)
+        .with_arg("install")
+        .assert()
+        .success();
+    pnpm_at(&workspace)
+        .with_args(["install", "--frozen-lockfile"])
+        .with_env("CI", "true")
+        .with_env("PNPM_CONFIG_CI", "true")
+        .assert()
+        .success();
+    let installs = fs::read(workspace.join("installs")).unwrap();
+    for _ in 0..2 {
+        pnpm_at(&workspace)
+            .with_args(["exec", "node", "-e", ""])
+            .with_env("CI", "true")
+            .with_env("PNPM_CONFIG_CI", "true")
+            .assert()
+            .success()
+            .stdout("");
+        let output = pnpm_at(&workspace)
+            .with_args(["run", "verify"])
+            .with_env("CI", "true")
+            .with_env("PNPM_CONFIG_CI", "true")
+            .assert()
+            .success();
+        let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+        assert!(stdout.contains("verified"), "{stdout}");
+        assert_eq!(fs::read(workspace.join("installs")).unwrap(), installs);
+    }
+    drop((root, npmrc_info));
+}
+
+#[test]
 fn partial_change_discovers_a_new_candidate_and_updates_existing_consumers() {
     for lockfile_only in [true, false] {
         let CommandTempCwd { root, workspace, npmrc_info, .. } =
